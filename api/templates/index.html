@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Docker Mini App</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css') }}"
+    />
+  </head>
+  <body>
+    <main class="page-shell">
+      <section class="hero-card">
+        <div class="hero-content">
+          <p class="eyebrow">Docker Topic 5 Demo</p>
+          <h1>Flask + PostgreSQL Mini App</h1>
+          <p class="hero-text">
+            A simple containerized task dashboard showing API, database,
+            environment variables, port mapping, and Docker Compose service
+            communication.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#tasks-section">Manage Tasks</a>
+            <a class="btn btn-secondary" href="/api/monitor" target="_blank"
+              >View API Monitor</a
+            >
+          </div>
+        </div>
+
+        <div class="docker-visual" aria-label="Docker architecture visual">
+          <div class="service-box api-box">
+            <span>Service 01</span>
+            <strong>Flask API</strong>
+            <small>localhost:8080</small>
+          </div>
+          <div class="connector"></div>
+          <div class="service-box db-box">
+            <span>Service 02</span>
+            <strong>PostgreSQL</strong>
+            <small>Docker network: db:5432</small>
+          </div>
+        </div>
+      </section>
+
+      <section class="status-grid">
+        <article class="status-card">
+          <span class="status-icon">🚀</span>
+          <p>API Status</p>
+          <strong id="apiStatus">Checking...</strong>
+        </article>
+        <article class="status-card">
+          <span class="status-icon">🗄️</span>
+          <p>Database</p>
+          <strong id="dbStatus">Checking...</strong>
+        </article>
+        <article class="status-card">
+          <span class="status-icon">✅</span>
+          <p>Completed Tasks</p>
+          <strong id="completedCount">0</strong>
+        </article>
+        <article class="status-card">
+          <span class="status-icon">📦</span>
+          <p>Total Tasks</p>
+          <strong id="totalCount">0</strong>
+        </article>
+      </section>
+
+      <section class="content-grid" id="tasks-section">
+        <section class="panel task-panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Task Manager</p>
+              <h2>Docker learning checklist</h2>
+            </div>
+            <button class="icon-btn" id="refreshBtn" title="Refresh tasks">
+              ↻
+            </button>
+          </div>
+
+          <form class="task-form" id="taskForm">
+            <input
+              id="taskInput"
+              type="text"
+              placeholder="Add a new Docker task..."
+              maxlength="120"
+              required
+            />
+            <button type="submit">Add Task</button>
+          </form>
+
+          <div class="task-list" id="taskList">
+            <div class="empty-state">Loading tasks...</div>
+          </div>
+        </section>
+
+        <aside class="panel info-panel">
+          <p class="eyebrow">Containerization Flow</p>
+          <h2>What this UI demonstrates</h2>
+          <ul class="feature-list">
+            <li><span>1</span> Browser sends requests to Flask container.</li>
+            <li>
+              <span>2</span> Flask reads DB settings from environment variables.
+            </li>
+            <li>
+              <span>3</span> API connects to PostgreSQL using Compose service
+              name <code>db</code>.
+            </li>
+            <li>
+              <span>4</span> PostgreSQL data persists through Docker volume.
+            </li>
+            <li>
+              <span>5</span> UI updates dynamically using REST API endpoints.
+            </li>
+          </ul>
+
+          <div class="endpoint-box">
+            <p>Useful endpoints</p>
+            <code>GET /health</code>
+            <code>GET /db-check</code>
+            <code>GET /tasks</code>
+            <code>POST /tasks</code>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+  </body>
+</html>

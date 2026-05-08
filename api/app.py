@@ -1,12 +1,21 @@
 import os
 import time
+import json
+from datetime import datetime
+from collections import deque
+from threading import Lock
+
 import psycopg2
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, render_template, request, Response
 
 app = Flask(__name__)
 
+# Global activity log storage (in-memory)
+activity_log = deque(maxlen=100)  # Keep last 100 activities
+log_lock = Lock()
+
+
 def get_db_config():
-    # Load config from env with defaults
     return {
         "host": os.getenv("DB_HOST", "db"),
         "port": int(os.getenv("DB_PORT", "5432")),
@@ -15,23 +24,165 @@ def get_db_config():
         "password": os.getenv("DB_PASSWORD", "fullstack_pass"),
     }
 
+
 def get_connection():
     return psycopg2.connect(**get_db_config())
 
+
+def init_db():
+    retries = 10
+    for i in range(retries):
+        try:
+            conn = get_connection()
+            cur = conn.cursor()
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS tasks (
+                    id SERIAL PRIMARY KEY,
+                    title VARCHAR(255) NOT NULL,
+                    is_done BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                """
+            )
+            conn.commit()
+            cur.close()
+            conn.close()
+            return
+        except Exception:
+            if i == retries - 1:
+                raise
+            time.sleep(1)
+
+
+def log_activity(method, path, status_code, request_body=None, response_body=None):
+    """Log API activity for monitoring"""
+    with log_lock:
+        activity = {
+            "timestamp": datetime.now().isoformat() + "Z",
+            "method": method,
+            "path": path,
+            "status": status_code,
+            "request": request_body,
+            "response": response_body,
+        }
+        activity_log.append(activity)
+
+
+@app.after_request
+def after_request(response):
+    """Log only task-related API requests"""
+    # Only log task-related endpoints
+    task_endpoints = ['/tasks']
+    
+    # Check if path is task-related
+    is_task_endpoint = False
+    for endpoint in task_endpoints:
+        if request.path == endpoint or request.path.startswith(endpoint + '/'):
+            is_task_endpoint = True
+            break
+    
+    # Skip if not a task endpoint
+    if not is_task_endpoint:
+        return response
+    
+    # Get request body if it's JSON
+    request_body = None
+    if request.is_json and request.method in ['POST', 'PATCH', 'PUT']:
+        try:
+            request_body = request.get_json()
+        except:
+            pass
+    
+    # Get response body if it's JSON
+    response_body = None
+    if response.is_json:
+        try:
+            response_body = response.get_json()
+        except:
+            pass
+    
+    log_activity(
+        method=request.method,
+        path=request.path,
+        status_code=response.status_code,
+        request_body=request_body,
+        response_body=response_body
+    )
+    
+    return response
+
+
 @app.route("/", methods=["GET"])
 def index():
-    return jsonify({
-        "status": "online",
-        "service": "Docker Topic 5 API",
-        "db_config": {
-            "host": os.getenv("DB_HOST"),
-            "port": os.getenv("DB_PORT")
+    return render_template("index.html")
+
+
+@app.route("/api", methods=["GET"])
+def api_docs():
+    return render_template("api.html")
+
+
+@app.route("/api/monitor", methods=["GET"])
+def api_monitor():
+    """API Activity Monitor page"""
+    return render_template("monitor.html")
+
+
+@app.route("/api/monitor/stream", methods=["GET"])
+def api_monitor_stream():
+    """Server-Sent Events stream for real-time activity"""
+    def generate():
+        # Send initial activities
+        with log_lock:
+            for activity in list(activity_log):
+                yield f"data: {json.dumps(activity)}\n\n"
+        
+        # Keep connection alive and send new activities
+        last_count = len(activity_log)
+        while True:
+            time.sleep(0.5)  # Check every 500ms
+            with log_lock:
+                current_count = len(activity_log)
+                if current_count > last_count:
+                    # Send new activities
+                    new_activities = list(activity_log)[-(current_count - last_count):]
+                    for activity in new_activities:
+                        yield f"data: {json.dumps(activity)}\n\n"
+                    last_count = current_count
+    
+    return Response(generate(), mimetype='text/event-stream')
+
+
+@app.route("/api/json", methods=["GET"])
+def api_info():
+    return jsonify(
+        {
+            "status": "online",
+            "service": "Docker Topic 5 API",
+            "ui": "available at /",
+            "api_docs": "available at /api",
+            "endpoints": {
+                "health": "/health",
+                "database_check": "/db-check",
+                "get_tasks": "GET /tasks",
+                "create_task": "POST /tasks",
+                "toggle_task": "PATCH /tasks/<id>/toggle",
+                "delete_task": "DELETE /tasks/<id>",
+            },
+            "db_config": {
+                "host": os.getenv("DB_HOST"),
+                "port": os.getenv("DB_PORT"),
+                "database": os.getenv("DB_NAME"),
+            },
         }
-    })
+    )
+
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"status": "up"})
+    return jsonify({"status": "up", "service": "api"})
+
 
 @app.route("/db-check", methods=["GET"])
 def db_check():
@@ -43,68 +194,128 @@ def db_check():
         cur.close()
         conn.close()
 
-        return jsonify({
-            "connection": "successful",
-            "info": {
-                "database": db_info[0],
-                "user": db_info[1]
+        return jsonify(
+            {
+                "connection": "successful",
+                "info": {
+                    "database": db_info[0],
+                    "user": db_info[1],
+                },
             }
-        })
+        )
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"connection": "failed", "error": str(e)}), 500
+
 
 @app.route("/tasks", methods=["GET"])
 def get_tasks():
     try:
         conn = get_connection()
         cur = conn.cursor()
-        cur.execute("SELECT id, title, is_done, created_at FROM tasks ORDER BY id;")
+        cur.execute("SELECT id, title, is_done, created_at FROM tasks ORDER BY id DESC;")
         rows = cur.fetchall()
-        
-        tasks = [{
-            "id": r[0],
-            "title": r[1],
-            "is_done": r[2],
-            "created_at": r[3].isoformat()
-        } for r in rows]
+
+        tasks = [
+            {
+                "id": r[0],
+                "title": r[1],
+                "is_done": r[2],
+                "created_at": r[3].isoformat(),
+            }
+            for r in rows
+        ]
 
         cur.close()
         conn.close()
         return jsonify(tasks)
     except Exception as e:
-        print(f"Error fetching tasks: {e}")
-        return jsonify({"msg": "Failed to fetch tasks"}), 500
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route("/tasks", methods=["POST"])
 def create_task():
     data = request.get_json() or {}
-    title = data.get("title")
-
+    title = (data.get("title") or "").strip()
     if not title:
-        return jsonify({"error": "Title required"}), 400
+        return jsonify({"error": "Task title is required"}), 400
 
     try:
         conn = get_connection()
         cur = conn.cursor()
         cur.execute(
             "INSERT INTO tasks (title) VALUES (%s) RETURNING id, title, is_done, created_at;",
-            (title,)
+            (title,),
         )
         row = cur.fetchone()
         conn.commit()
         cur.close()
         conn.close()
 
-        return jsonify({
-            "id": row[0],
-            "title": row[1],
-            "is_done": row[2],
-            "created_at": row[3].isoformat()
-        }), 201
+        return jsonify(
+            {
+                "id": row[0],
+                "title": row[1],
+                "is_done": row[2],
+                "created_at": row[3].isoformat(),
+            }
+        ), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+@app.route("/tasks/<int:task_id>/toggle", methods=["PATCH"])
+def toggle_task(task_id):
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE tasks
+            SET is_done = NOT is_done
+            WHERE id = %s
+            RETURNING id, title, is_done, created_at;
+            """,
+            (task_id,),
+        )
+        row = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        if not row:
+            return jsonify({"error": "Task not found"}), 404
+
+        return jsonify(
+            {
+                "id": row[0],
+                "title": row[1],
+                "is_done": row[2],
+                "created_at": row[3].isoformat(),
+            }
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/tasks/<int:task_id>", methods=["DELETE"])
+def delete_task(task_id):
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM tasks WHERE id = %s RETURNING id;", (task_id,))
+        row = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        if not row:
+            return jsonify({"error": "Task not found"}), 404
+
+        return jsonify({"deleted": True, "id": row[0]})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 if __name__ == "__main__":
-    # Wait for DB to be ready in dev
-    time.sleep(1) 
+    init_db()
     app.run(host="0.0.0.0", port=8080)

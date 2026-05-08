@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>API Documentation</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <main class="container">
+        <section class="hero">
+            <h1>API Documentation</h1>
+            <p>This page explains the available endpoints of the Docker Mini App.</p>
+
+            <div class="link-group">
+                <a href="/">Back to Mini App</a>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>Available Endpoints</h2>
+
+            <div class="api-list">
+                <div class="api-item">
+                    <span class="method get">GET</span>
+                    <code>/health</code>
+                    <p>Check whether the Flask API service is running.</p>
+                </div>
+
+                <div class="api-item">
+                    <span class="method get">GET</span>
+                    <code>/db-check</code>
+                    <p>Check whether the PostgreSQL database connection is successful.</p>
+                </div>
+
+                <div class="api-item">
+                    <span class="method get">GET</span>
+                    <code>/tasks</code>
+                    <p>Get all tasks from the database.</p>
+                </div>
+
+                <div class="api-item">
+                    <span class="method post">POST</span>
+                    <code>/tasks</code>
+                    <p>Create a new task.</p>
+                    <pre>{
+  "title": "Learn Docker Compose"
+}</pre>
+                </div>
+
+                <div class="api-item">
+                    <span class="method patch">PATCH</span>
+                    <code>/tasks/&lt;id&gt;/toggle</code>
+                    <p>Toggle a task between done and not done.</p>
+                </div>
+
+                <div class="api-item">
+                    <span class="method delete">DELETE</span>
+                    <code>/tasks/&lt;id&gt;</code>
+                    <p>Delete a task by ID.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>Example cURL Commands</h2>
+
+            <p>Check API:</p>
+            <pre>curl http://localhost:8080/health</pre>
+
+            <p>Check database:</p>
+            <pre>curl http://localhost:8080/db-check</pre>
+
+            <p>Create task:</p>
+            <pre>curl -X POST http://localhost:8080/tasks -H "Content-Type: application/json" -d "{\"title\":\"Learn Docker\"}"</pre>
+        </section>
+    </main>
+</body>
+</html>

@@ -1,14 +1,24 @@
-# Docker Topic 5: Flask API & PostgreSQL
+# Docker Topic 5: Flask + PostgreSQL + UI
 
-Dự án này thực hiện containerize một ứng dụng Flask API kết nối cơ sở dữ liệu PostgreSQL theo yêu cầu của Đề bài 5.
+Dự án mini-app cho Đề bài 5: containerize ứng dụng web bằng Docker, chạy với `docker-compose` gồm 2 service `api` và `db`, có UI để thao tác trực quan với task.
 
 ## Cấu trúc thư mục
-- `api/`: Backend Flask, Dockerfile và các dependencies.
-- `db/`: SQL script khởi tạo database ban đầu.
-- `docker-compose.yml`: Quản lý các service và biến môi trường.
 
-## Hướng dẫn chạy nhanh
-1. Sao chép cấu hình môi trường:
+- `api/`: Flask app, Dockerfile, giao diện UI (`templates/`, `static/`), dependencies.
+- `db/`: SQL script khởi tạo bảng và dữ liệu mẫu.
+- `docker-compose.yml`: định nghĩa 2 service `api` và `db`.
+- `.env.example`: mẫu biến môi trường cho kết nối database.
+
+## Công nghệ
+
+- Backend: Flask
+- Database: PostgreSQL
+- UI: HTML/CSS/JavaScript (render từ Flask templates)
+- Containerization: Docker + Docker Compose
+
+## Chạy nhanh
+
+1. Tạo file môi trường:
    ```bash
    cp .env.example .env
    ```
@@ -16,45 +26,68 @@ Dự án này thực hiện containerize một ứng dụng Flask API kết nố
    ```bash
    docker compose up -d --build
    ```
-3. Kiểm tra API tại: `http://localhost:8080/`
+3. Truy cập:
+   - UI chính: `http://localhost:8080/`
+   - Trang API docs UI: `http://localhost:8080/api`
+   - API JSON tổng quan: `http://localhost:8080/api/json`
 
----
+## Endpoint hiện tại (khớp code)
 
-## Giải quyết các bài tập
+- `GET /`: UI mini-app.
+- `GET /api`: UI mô tả API.
+- `GET /api/json`: thông tin tổng quan service và endpoints.
+- `GET /health`: trạng thái API, trả về `{"status":"up","service":"api"}`.
+- `GET /db-check`: kiểm tra kết nối DB.
+- `GET /tasks`: lấy danh sách task (sắp xếp mới nhất trước).
+- `POST /tasks`: tạo task mới, body JSON `{"title":"..."}`.
+- `PATCH /tasks/<id>/toggle`: đổi trạng thái hoàn thành task.
+- `DELETE /tasks/<id>`: xóa task theo id.
 
-### Bài 1: Dockerfile cho Web Application
-Dockerfile được đặt tại `api/Dockerfile`. Các điểm lưu ý:
-- Sử dụng base image `python:3.12-slim` để giảm dung lượng image.
-- Lắng nghe tại cổng `8080` (đã `EXPOSE` và cấu hình trong code).
-- Tận dụng cơ chế layer caching bằng cách copy `requirements.txt` và install trước khi copy source code.
+## Luồng kết nối service
 
-**Lệnh build thủ công:**
+- Trình duyệt gọi vào `api` qua cổng host `8080`.
+- `api` đọc biến môi trường `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`.
+- Trong mạng Docker Compose, `api` kết nối PostgreSQL bằng service name `db` (không dùng IP tĩnh).
+- `db` mở cổng nội bộ `5432`, map ra host `5433` để kiểm tra khi cần.
+
+## Đáp ứng 3 bài tập ứng dụng
+
+### Bài 1
+
+- Có `api/Dockerfile` cho web app Python Flask.
+- App chạy cổng `8080` (`EXPOSE 8080`, Flask bind `0.0.0.0:8080`).
+
+### Bài 2
+
+- `docker-compose.yml` có đúng 2 service chính: `api` và `db`.
+- `api` dùng biến môi trường `DB_HOST/DB_PORT` để kết nối DB.
+- Kết nối DB bằng service name `db`.
+
+### Bài 3
+
+- Có tài liệu triển khai chi tiết tại `DEPLOYMENT.md`:
+  - chuẩn bị môi trường,
+  - cấu hình biến môi trường,
+  - triển khai bằng Docker Compose,
+  - kiểm tra sau deploy.
+
+## Lệnh kiểm tra nhanh
+
 ```bash
-docker build -t my-api ./api
+curl http://localhost:8080/health
+curl http://localhost:8080/db-check
+curl http://localhost:8080/tasks
+curl -X POST http://localhost:8080/tasks -H "Content-Type: application/json" -d '{"title":"Demo task"}'
 ```
 
-### Bài 2: Docker Compose với 2 service (API + DB)
-Hệ thống sử dụng Docker Compose để quản lý đồng thời Flask API và PostgreSQL.
-- **Biến môi trường:** API nhận `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` từ file `.env` thông qua `docker-compose.yml`.
-- **Kết nối:** Trong mạng nội bộ của Docker, API kết nối tới database bằng tên service là `db` thay vì dùng IP.
-- **Thứ tự khởi động:** Sử dụng `depends_on` kèm `healthcheck` để đảm bảo PostgreSQL sẵn sàng trước khi API khởi chạy.
+## Dừng hệ thống
 
-### Bài 3: Quy trình Deployment
-Quy trình triển khai ứng dụng gồm các bước chính:
-1. **Chuẩn bị:** Cài đặt Docker và Docker Compose trên server.
-2. **Cấu hình:** Thiết lập file `.env` với các thông số bảo mật cho production (đổi password mặc định).
-3. **Triển khai:** Chạy `docker compose up -d`. Hệ thống sẽ tự động pull image, tạo network, và thực thi script `init.sql` để tạo bảng.
-4. **Kiểm tra:** 
-   - Kiểm tra log: `docker compose logs -f`.
-   - Kiểm tra kết nối: Truy cập endpoint `/db-check` để xác nhận API đã thông tới database.
+```bash
+docker compose down
+```
 
----
+Xóa luôn dữ liệu volume:
 
-## Kiểm tra các Endpoint
-- `GET /health`: Kiểm tra trạng thái API.
-- `GET /db-check`: Kiểm tra kết nối tới PostgreSQL.
-- `GET /tasks`: Lấy danh sách task mẫu từ database (đã seed qua `init.sql`).
-
-## Xử lý sự cố (Troubleshooting)
-- Nếu bị lỗi cổng 8080: Kiểm tra xem có app nào đang chiếm dụng cổng không bằng lệnh `lsof -i:8080`.
-- Reset lại dữ liệu: Chạy `docker compose down -v` để xóa toàn bộ volume và khởi động lại.
+```bash
+docker compose down -v
+```
