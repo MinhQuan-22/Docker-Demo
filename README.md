@@ -2,6 +2,8 @@
 
 Dự án mini-app cho Đề bài 5: containerize ứng dụng web bằng Docker, chạy với `docker-compose` gồm 2 service `api` và `db`, có UI để thao tác trực quan với task.
 
+> Note: Mình đã test trên Mac và Ubuntu, chạy khá ổn. Nếu bạn gặp vấn đề gì thì check lại Docker version nhé.
+
 ## Cấu trúc thư mục
 
 - `api/`: Flask app, Dockerfile, giao diện UI (`templates/`, `static/`), dependencies.
@@ -11,12 +13,14 @@ Dự án mini-app cho Đề bài 5: containerize ứng dụng web bằng Docker,
 
 ## Công nghệ
 
-- Backend: Flask
+- Backend: Flask (đơn giản mà hiệu quả)
 - Database: PostgreSQL
 - UI: HTML/CSS/JavaScript (render từ Flask templates)
 - Containerization: Docker + Docker Compose
 
 ## Chạy nhanh
+
+Pretty straightforward, chỉ cần 3 bước:
 
 1. Tạo file môi trường:
    ```bash
@@ -47,8 +51,10 @@ Dự án mini-app cho Đề bài 5: containerize ứng dụng web bằng Docker,
 
 - Trình duyệt gọi vào `api` qua cổng host `8080`.
 - `api` đọc biến môi trường `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`.
-- Trong mạng Docker Compose, `api` kết nối PostgreSQL bằng service name `db` (không dùng IP tĩnh).
+- Trong mạng Docker Compose, `api` kết nối PostgreSQL bằng service name `db` (không dùng IP tĩnh - đây là best practice).
 - `db` mở cổng nội bộ `5432`, map ra host `5433` để kiểm tra khi cần.
+
+Tip: Nếu bạn muốn connect trực tiếp vào DB từ host machine, dùng port 5433 nhé (không phải 5432).
 
 ## Đáp ứng 3 bài tập ứng dụng
 
@@ -71,7 +77,11 @@ Dự án mini-app cho Đề bài 5: containerize ứng dụng web bằng Docker,
   - triển khai bằng Docker Compose,
   - kiểm tra sau deploy.
 
+(Honestly, DEPLOYMENT.md có đủ mọi thứ bạn cần để chạy được project này)
+
 ## Lệnh kiểm tra nhanh
+
+Here's how to test the endpoints:
 
 ```bash
 curl http://localhost:8080/health
@@ -86,7 +96,7 @@ curl -X POST http://localhost:8080/tasks -H "Content-Type: application/json" -d 
 docker compose down
 ```
 
-Xóa luôn dữ liệu volume:
+Xóa luôn dữ liệu volume (careful - this deletes all your data!):
 
 ```bash
 docker compose down -v

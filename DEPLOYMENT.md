@@ -6,6 +6,8 @@ Tài liệu này mô tả quy trình chạy và kiểm tra hệ thống hiện t
 - `db`: PostgreSQL
 - `docker-compose.yml`: orchestration 2 service
 
+> **Tip**: Đọc hết tài liệu này trước khi bắt đầu. Mình đã gặp vài lỗi ngớ ngẩn vì skip qua một số bước.
+
 ## 1) Yêu cầu môi trường
 
 - Docker Engine
@@ -36,6 +38,8 @@ DB_USER=fullstack_user
 DB_PASSWORD=fullstack_pass
 ```
 
+**Warning**: Đừng commit file `.env` lên git nhé! (Mặc dù đây là demo app nhưng vẫn nên giữ thói quen tốt)
+
 ## 3) Deploy local
 
 Từ thư mục project:
@@ -50,6 +54,8 @@ Kỳ vọng:
 - `topic5_api` trạng thái `Up`
 - `topic5_db` trạng thái `Up (healthy)`
 
+**Troubleshooting**: Nếu container không start được, check logs bằng `docker compose logs api` hoặc `docker compose logs db`. Thường là do port bị conflict hoặc thiếu file `.env`.
+
 ## 4) Truy cập sau deploy
 
 - UI chính: `http://localhost:8080/`
@@ -60,6 +66,8 @@ Port mapping hiện tại:
 
 - API: `8080:8080`
 - DB: `5433:5432`
+
+Note: Mình dùng port 5433 cho DB thay vì 5432 vì máy mình đã có PostgreSQL chạy sẵn ở 5432. Nếu bạn cũng vậy thì giữ nguyên, không thì có thể đổi lại 5432:5432 trong docker-compose.yml
 
 ## 5) Kiểm tra chức năng (đúng endpoint thật)
 
@@ -72,7 +80,7 @@ curl http://localhost:8080/health
 Response mẫu:
 
 ```json
-{"status":"up","service":"api"}
+{ "status": "up", "service": "api" }
 ```
 
 ### 5.2 Kiểm tra kết nối database
@@ -92,6 +100,8 @@ Response mẫu thành công:
   }
 }
 ```
+
+Nếu thấy error ở đây thì 99% là do DB chưa ready. Đợi thêm vài giây rồi thử lại.
 
 ### 5.3 Test task API
 
@@ -128,6 +138,8 @@ curl -X DELETE http://localhost:8080/tasks/1
 - API kết nối PostgreSQL qua service name `db` trong mạng Docker Compose.
 - Dữ liệu DB được lưu qua volume `postgres_data`.
 
+**Important**: Service name `db` chỉ work trong Docker network. Nếu bạn muốn connect từ host machine (ví dụ dùng pgAdmin), phải dùng `localhost:5433`.
+
 ## 7) Xem logs và xử lý sự cố
 
 Xem logs:
@@ -139,16 +151,19 @@ docker compose logs -f db
 
 Lỗi thường gặp:
 
-- Cổng `8080` bận:
+- **Cổng `8080` bận**:
   ```bash
   lsof -i :8080
   ```
-- Cổng `5433` bận:
+  Giải pháp: Kill process đang dùng port 8080 hoặc đổi port trong docker-compose.yml
+- **Cổng `5433` bận**:
   ```bash
   lsof -i :5433
   ```
+  Giải pháp: Tương tự như trên
+- **Container restart liên tục**: Thường là do DB connection failed. Check xem DB container có healthy không bằng `docker compose ps`. Nếu không healthy thì xem logs của db container.
 
-Reset toàn bộ dữ liệu DB:
+Reset toàn bộ dữ liệu DB (khi mọi thứ rối quá):
 
 ```bash
 docker compose down -v

@@ -10,10 +10,15 @@ services:
       DB_NAME: ${DB_NAME:-fullstack_demo}
       DB_USER: ${DB_USER:-fullstack_user}
       DB_PASSWORD: ${DB_PASSWORD:-fullstack_pass}
+      # DEBUG: ${DEBUG:-false}  # uncomment if you need debug mode
+    # volumes:
+    #   - ./api:/app  # hot reload during dev, but not needed for prod
     depends_on:
       db:
         condition: service_healthy
     restart: unless-stopped
+    # networks:
+    #   - app_network  # tried custom network but default bridge works fine
 
   db:
     image: postgres:16-alpine
@@ -22,17 +27,25 @@ services:
       POSTGRES_DB: ${DB_NAME:-fullstack_demo}
       POSTGRES_USER: ${DB_USER:-fullstack_user}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-fullstack_pass}
+      # POSTGRES_INITDB_ARGS: "--encoding=UTF8"  # default is fine
     ports:
-      - "5433:5432"
+      - "5433:5432" # using 5433 to avoid conflict with local postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      # - ./db/backup:/backup  # for manual backups if needed
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U fullstack_user -d fullstack_demo"]
       interval: 5s
       timeout: 3s
       retries: 10
     restart: unless-stopped
+    # networks:
+    #   - app_network
 
 volumes:
   postgres_data:
+
+# networks:
+#   app_network:
+#     driver: bridge
